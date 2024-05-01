@@ -3,6 +3,7 @@
  * Copyright (C) 2003-2004  Narcis Ilisei <inarcis2002@hotpop.com>
  * Copyright (C) 2006       Steve Horbachuk
  * Copyright (C) 2010-2021  Joachim Wiberg <troglobit@gmail.com>
+ * Copyright (C) 2024       Chris Fraire <cfraire@me.com>
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License
@@ -23,12 +24,14 @@
 
 #include "plugin.h"
 
+/*
+ * For API information, see
+ * https://dnsexit.com/apps/dynamic-dns-update-clients/
+ */
 #define DNSEXIT_UPDATE_IP_HTTP_REQUEST					\
 	"GET %s?"							\
-	"login=%s&"							\
-	"password=%s&"							\
-	"host=%s&"							\
-	"myip=%s "							\
+	"apikey=%s&"							\
+	"host=%s "							\
 	"HTTP/1.0\r\n"							\
 	"Host: %s\r\n"							\
 	"User-Agent: %s\r\n\r\n"
@@ -42,11 +45,14 @@ static ddns_system_t plugin = {
 	.request      = (req_fn_t)request,
 	.response     = (rsp_fn_t)response,
 
+	.nousername   = 1,	/* Provider does not require username */
+
 	.checkip_name = "ip3.dnsexit.com",
 	.checkip_url  = "/",
+	.checkip_ssl  = DDNS_CHECKIP_SSL_UNSUPPORTED,
 
-	.server_name  = "update.dnsexit.com",
-	.server_url   = "/RemoteUpdate.sv"
+	.server_name  = "api.dnsexit.com",
+	.server_url   = "/dns/ud/"
 };
 
 static int request(ddns_t *ctx, ddns_info_t *info, ddns_alias_t *alias)
@@ -54,10 +60,8 @@ static int request(ddns_t *ctx, ddns_info_t *info, ddns_alias_t *alias)
 	return snprintf(ctx->request_buf, ctx->request_buflen,
 			info->system->server_req,
 			info->server_url,
-			info->creds.username,
 			info->creds.password,
 			alias->name,
-			alias->address,
 			info->server_name.name,
 			info->user_agent);
 }
