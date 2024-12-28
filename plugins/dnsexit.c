@@ -23,6 +23,7 @@
  */
 
 #include "plugin.h"
+#include "json.h"
 
 /*
  * For API information, see
@@ -55,6 +56,46 @@ static ddns_system_t plugin = {
 	.server_url   = "/dns/ud/"
 };
 
+static int get_code_value(const char *json)
+{
+	const char * const KCODE = "code";
+	int rc = -1;
+	int i, num_tokens;
+	jsmntok_t *tokens;
+
+	num_tokens = parse_json(json, &tokens);
+	if (num_tokens < 0)
+		return -1;
+
+	if (tokens[0].type != JSMN_OBJECT) {
+		logit(LOG_ERR, "JSON response contained no objects.");
+		goto cleanup;
+	}
+
+	for (i = 1; i < num_tokens; i++) {
+		if (jsoneq(json, tokens + i, KCODE) == 0 &&
+		    token->type == JSMN_PRIMITIVE &&
+		    i + 1 < num_tokens) {
+			switch (*(json + token[i + 1]->start))
+			{
+				case 't': /* true */
+				case 'f': /* false */
+				case 'n': /* null */
+					continue;
+				default:
+					rc = atoi(json + token[i + 1]->start);
+					break;
+			}
+			goto cleanup;
+		}
+	}
+
+	logit(LOG_INFO, "Could not find number primitive '%s'.", KCODE);
+cleanup:
+	free(tokens);
+	return rc;
+}
+
 static int request(ddns_t *ctx, ddns_info_t *info, ddns_alias_t *alias)
 {
 	return snprintf(ctx->request_buf, ctx->request_buflen,
@@ -76,21 +117,30 @@ static int response(http_trans_t *trans, ddns_info_t *info, ddns_alias_t *alias)
 
 	DO(http_status_valid(trans->status));
 
-	tmp = strstr(trans->rsp_body, "\n");
-	if (tmp) {
-		int rc;
-
-		rc = sscanf(++tmp, "%4d=", &code);
-		if (rc < 1)
-			goto err;
+	tmp = strchr(trans->rsp_body, '\n');
+	if (tmp != NULL) {
+		code = get_code_value(tmp);
 	}
+
+	/*
+	 * 0 Success
+	 * 1 Some execution problems. May not indicate actions failures.
+	 * 2 API Key Authentication Error
+	 * 3 Missing Required Definitions
+	 * 4 JSON Data Syntax Error
+	 * 5 JSON Defined Record Type not Supported
+	 * 6 System Error	Our system problem.
+	 * 7 Error getting post data
+	 */
 
 	switch (code) {
 	case 0:
-	case 1:
 		return 0;
-	case 4:
-	case 11:
+	case 1:
+	case 2:
+	case 6:
+	case 7:
+		logit(LOG_DEBUG, "DNSExit result code: %d\n", code);
 		return RC_DDNS_RSP_RETRY_LATER;
 	default:
 		break;
