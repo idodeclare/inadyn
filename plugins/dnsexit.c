@@ -124,30 +124,18 @@ static int response(http_trans_t *trans, ddns_info_t *info, ddns_alias_t *alias)
 	}
 
 	/*
-	 * 0 Success
-	 * 1 Some execution problems. May not indicate actions failures.
-	 * 2 API Key Authentication Error
-	 * 3 Missing Required Definitions
-	 * 4 JSON Data Syntax Error
-	 * 5 JSON Defined Record Type not Supported
-	 * 6 System Error	Our system problem.
-	 * 7 Error getting post data
+	 * "code:0 indicates successful updates while code:1 indicates IP
+	 * address not changed. Other returning codes indicate errors."
 	 */
+	logit(LOG_DEBUG, "DNSExit result code: %d\n", code);
 
 	switch (code) {
 	case 0:
-		return 0;
 	case 1:
-	case 2:
-	case 6:
-	case 7:
-		logit(LOG_DEBUG, "DNSExit result code: %d\n", code);
-		return RC_DDNS_RSP_RETRY_LATER;
+		return 0;
 	default:
-		break;
+		return RC_DDNS_RSP_RETRY_LATER;
 	}
-err:
-	return RC_DDNS_RSP_NOTOK;
 }
 
 PLUGIN_INIT(plugin_init)
