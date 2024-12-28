@@ -61,7 +61,7 @@ static int get_code_value(const char *json)
 	const char * const KCODE = "code";
 	int rc = -1;
 	int i, num_tokens;
-	jsmntok_t *tokens;
+	jsmntok_t *tokens, *token;
 
 	num_tokens = parse_json(json, &tokens);
 	if (num_tokens < 0)
@@ -74,16 +74,17 @@ static int get_code_value(const char *json)
 
 	for (i = 1; i < num_tokens; i++) {
 		if (jsoneq(json, tokens + i, KCODE) == 0 &&
-		    token->type == JSMN_PRIMITIVE &&
-		    i + 1 < num_tokens) {
-			switch (*(json + token[i + 1]->start))
+		    i + 1 < num_tokens &&
+		    (token = tokens + i + 1) != NULL &&
+		    token->type == JSMN_PRIMITIVE) {
+			switch (*(json + token->start))
 			{
 				case 't': /* true */
 				case 'f': /* false */
 				case 'n': /* null */
 					continue;
 				default:
-					rc = atoi(json + token[i + 1]->start);
+					rc = atoi(json + token->start);
 					break;
 			}
 			goto cleanup;
